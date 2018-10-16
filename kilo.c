@@ -1,3 +1,4 @@
+
 /* Kilo -- A very simple editor in less than 1-kilo lines of code (as counted
  *         by "cloc"). Does not depend on libcurses, directly emits VT100
  *         escapes on the terminal.
@@ -50,6 +51,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 /* Syntax highlight types */
 #define HL_NORMAL 0
@@ -113,7 +115,9 @@ enum KEY_ACTION{
         CTRL_C = 3,         /* Ctrl-c */
         CTRL_D = 4,         /* Ctrl-d */
         CTRL_F = 6,         /* Ctrl-f */
-        CTRL_H = 8,         /* Ctrl-h */
+        CTRL_G = 7,			/* Ctrl-g */
+		CTRL_T = 20,		/* Ctrl-T */
+		CTRL_H = 8,         /* Ctrl-h */
         TAB = 9,            /* Tab */
         CTRL_L = 12,        /* Ctrl+l */
         ENTER = 13,         /* Enter */
@@ -180,6 +184,49 @@ struct editorSyntax HLDB[] = {
         HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_NUMBERS
     }
 };
+
+void editorRefreshScreen(); // forward declear to avoid compile exception
+
+void moveToEnd() {
+	int factor = 0;
+
+	if(E.numrows > E.screenrows) 
+		factor = E.numrows / E.screenrows;
+	
+	if(factor > 0) {
+		if(E.cy != E.screenrows) {
+			E.cy = E.screenrows - 1;
+			E.cx = 0;
+		}
+		editorRefreshScreen();
+		if(++E.rowoff + E.cy <= E.numrows-1) {
+			editorRefreshScreen();
+			moveToEnd();
+		} else 
+			E.rowoff--;
+	} else {
+		E.cy = E.numrows - 1;
+		E.cx = 0;
+	}
+}
+
+void moveToFirst() {
+	if(E.rowoff > 0) {
+		E.cy = 0;
+		E.cx = 0;
+		editorRefreshScreen();
+		E.rowoff--;
+		editorRefreshScreen();
+		moveToFirst();
+	} else { 
+		E.cy = 0;
+		E.cx = 0;
+	}
+}
+
+void moveToLineEnd() {
+	E.cx = E.row[E.rowoff + E.cy].size;
+}
 
 #define HLDB_ENTRIES (sizeof(HLDB)/sizeof(HLDB[0]))
 
@@ -360,7 +407,8 @@ int editorRowHasOpenComment(erow *row) {
     if (row->hl && row->rsize && row->hl[row->rsize-1] == HL_MLCOMMENT &&
         (row->rsize < 2 || (row->render[row->rsize-2] != '*' ||
                             row->render[row->rsize-1] != '/'))) return 1;
-    return 0;
+   	
+	return 0;
 }
 
 /* Set every byte of row->hl (that corresponds to every character in the line)
@@ -372,13 +420,15 @@ void editorUpdateSyntax(erow *row) {
     if (E.syntax == NULL) return; /* No syntax, everything is HL_NORMAL. */
 
     int i, prev_sep, in_string, in_comment;
-    char *p;
+	int rowidx_backup;
+	char *p;
     char **keywords = E.syntax->keywords;
     char *scs = E.syntax->singleline_comment_start;
     char *mcs = E.syntax->multiline_comment_start;
     char *mce = E.syntax->multiline_comment_end;
-
-    /* Point to the first non-space char. */
+	char* temp;
+    
+	/* Point to the first non-space char. */
     p = row->render;
     i = 0; /* Current char offset */
     while(*p && isspace(*p)) {
@@ -389,12 +439,37 @@ void editorUpdateSyntax(erow *row) {
     in_string = 0; /* Are we inside "" or '' ? */
     in_comment = 0; /* Are we inside multi-line comment? */
 
-    /* If the previous line has an open comment, this line starts
-     * with an open comment state. */
-    if (row->idx > 0 && editorRowHasOpenComment(&E.row[row->idx-1]))
-        in_comment = 1;
+  	rowidx_backup = row->idx;
+	temp = p;
+	while(row->idx > 0 && *temp != mce[0] && *(temp+1) != mce[1]) {
+		if(editorRowHasOpenComment(&E.row[row->idx-1]))
+			in_comment = 1;
+		row->idx--;
+		temp = E.row[row->idx].render;
+		while(*temp && isspace(*temp)) 
+			temp++;
+	}
+	row->idx = rowidx_backup;
 
-    while(*p) {
+	rowidx_backup = row->idx;
+	temp = p;
+	if(!in_comment && *(temp) == mce[0] && *(temp+1) == mce[1]) {
+		while(row->idx > 0) {	
+			while(*temp && isspace(*temp)) 
+				temp++;
+			if(*temp != mcs[0] && *(temp+1) != mcs[1])
+				in_comment = 0;
+			else {
+				in_comment = 1;
+				break;
+			}
+			row->idx--;
+			temp = E.row[row->idx].render;
+		}
+	}
+	row->idx = rowidx_backup;
+	
+	while(*p) {
         /* Handle // comments. */
         if (prev_sep && *p == scs[0] && *(p+1) == scs[1]) {
             /* From here to end is a comment */
@@ -413,16 +488,15 @@ void editorUpdateSyntax(erow *row) {
                 continue;
             } else {
                 prev_sep = 0;
-                p++; i++;
+                p+=1; i+=1;
                 continue;
             }
         } else if (*p == mcs[0] && *(p+1) == mcs[1]) {
             row->hl[i] = HL_MLCOMMENT;
             row->hl[i+1] = HL_MLCOMMENT;
             p += 2; i += 2;
-            in_comment = 1;
             prev_sep = 0;
-            continue;
+			continue;
         }
 
         /* Handle "" and '' */
@@ -510,7 +584,7 @@ int editorSyntaxToColor(int hl) {
     case HL_KEYWORD1: return 33;    /* yellow */
     case HL_KEYWORD2: return 32;    /* green */
     case HL_STRING: return 35;      /* magenta */
-    case HL_NUMBER: return 31;      /* red */
+	case HL_NUMBER: return 37;      /* white */
     case HL_MATCH: return 34;      /* blu */
     default: return 37;             /* white */
     }
@@ -603,7 +677,7 @@ void editorDelRow(int at) {
     row = E.row+at;
     editorFreeRow(row);
     memmove(E.row+at,E.row+at+1,sizeof(E.row[0])*(E.numrows-at-1));
-    for (int j = at; j < E.numrows-1; j++) E.row[j].idx++;
+    for (int j = at; j < E.numrows-1; j++) E.row[j].idx--;
     E.numrows--;
     E.dirty++;
 }
@@ -664,7 +738,7 @@ void editorRowAppendString(erow *row, char *s, size_t len) {
     memcpy(row->chars+row->size,s,len);
     row->size += len;
     row->chars[row->size] = '\0';
-    editorUpdateRow(row);
+	editorUpdateRow(row);
     E.dirty++;
 }
 
@@ -739,7 +813,8 @@ fixcursor:
 void editorDelChar() {
     int filerow = E.rowoff+E.cy;
     int filecol = E.coloff+E.cx;
-    erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
+	erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
+	int delRowSize = row->size;
 
     if (!row || (filecol == 0 && filerow == 0)) return;
     if (filecol == 0) {
@@ -748,17 +823,21 @@ void editorDelChar() {
         filecol = E.row[filerow-1].size;
         editorRowAppendString(&E.row[filerow-1],row->chars,row->size);
         editorDelRow(filerow);
-        row = NULL;
+		row = NULL;
         if (E.cy == 0)
             E.rowoff--;
         else
             E.cy--;
-        E.cx = filecol;
-        if (E.cx >= E.screencols) {
-            int shift = (E.screencols-E.cx)+1;
+		
+		E.coloff = E.row[filerow-1].size - E.screencols;
+        E.cx = E.screencols - delRowSize;
+		/*		
+		if (E.cx >= E.screencols) {
+			int shift = (E.screencols-E.cx)+1;
             E.cx -= shift;
             E.coloff += shift;
-        }
+		}
+		*/
     } else {
         editorRowDelChar(row,filecol-1);
         if (E.cx == 0 && E.coloff)
@@ -998,6 +1077,7 @@ void editorFind(int fd) {
 #define FIND_RESTORE_HL do { \
     if (saved_hl) { \
         memcpy(E.row[saved_hl_line].hl,saved_hl, E.row[saved_hl_line].rsize); \
+        free(saved_hl); \
         saved_hl = NULL; \
     } \
 } while (0)
@@ -1124,7 +1204,7 @@ void editorMoveCursor(int key) {
             } else {
                 E.cy += 1;
             }
-        }
+        } 
         break;
     case ARROW_UP:
         if (E.cy == 0) {
@@ -1174,7 +1254,16 @@ void editorProcessKeypress(int fd) {
         /* We ignore ctrl-c, it can't be so simple to lose the changes
          * to the edited file. */
         break;
-    case CTRL_Q:        /* Ctrl-q */
+	case CTRL_G:
+		moveToEnd();
+		break;
+	case CTRL_T:
+		moveToFirst();
+		break;
+	case CTRL_D:
+		moveToLineEnd();
+		break;
+	case CTRL_Q:        /* Ctrl-q */
         /* Quit if the file was already saved. */
         if (E.dirty && quit_times) {
             editorSetStatusMessage("WARNING!!! File has unsaved changes. "
@@ -1182,7 +1271,13 @@ void editorProcessKeypress(int fd) {
             quit_times--;
             return;
         }
-        exit(0);
+		struct abuf temp = ABUF_INIT;
+		abAppend(&temp, "\x1b[2J", 4);
+		abAppend(&temp, "\x1b[H", 3);
+		
+		write(STDOUT_FILENO, temp.b, temp.len);
+		abFree(&temp);
+		exit(0);
         break;
     case CTRL_S:        /* Ctrl-s */
         editorSave();
