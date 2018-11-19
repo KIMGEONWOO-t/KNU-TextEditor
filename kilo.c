@@ -1,38 +1,3 @@
-
-/* Kilo -- A very simple editor in less than 1-kilo lines of code (as counted
- *         by "cloc"). Does not depend on libcurses, directly emits VT100
- *         escapes on the terminal.
- *
- * -----------------------------------------------------------------------
- *
- * Copyright (C) 2016 Salvatore Sanfilippo <antirez at gmail dot com>
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *
- *  *  Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *
- *  *  Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
 #define KILO_VERSION "0.0.1"
 
 #define _BSD_SOURCE
@@ -81,8 +46,8 @@ typedef struct erow {
     int idx;            /* Row index in the file, zero-based. */
     int size;           /* Size of the row, excluding the null term. */
     int rsize;          /* Size of the rendered row. */
-    char *chars;        /* Row content. */
-    char *render;       /* Row content "rendered" for screen (for TABs). */
+    char *chars;        /* Row content. */ //행의 내용
+    char *render;       /* Row content "rendered" for screen (for TABs). */ //탭 상태
     unsigned char *hl;  /* Syntax highlight type for each character in render.*/
     int hl_oc;          /* Row had open comment at end in last syntax highlight
                            check. */
@@ -95,13 +60,13 @@ typedef struct hlcolor {
 struct editorConfig {
     int cx,cy;  /* Cursor x and y position in characters */
     int rowoff;     /* Offset of row displayed. */
-    int coloff;     /* Offset of column displayed. */
+    int coloff;     /* Offset of column displayed. */ //offset : 기준으로 부터 결과 지점까지의 차이 (변위)
     int screenrows; /* Number of rows that we can show */
     int screencols; /* Number of cols that we can show */
     int numrows;    /* Number of rows */
     int rawmode;    /* Is terminal raw mode enabled? */
     erow *row;      /* Rows */
-    int dirty;      /* File modified but not saved. */
+    int dirty;      /* File modified but not saved. */ //저장된 후의 버퍼수정을 나타냄
     char *filename; /* Currently open filename */
     char statusmsg[80];
     time_t statusmsg_time;
@@ -189,43 +154,43 @@ void editorRefreshScreen(); // forward declear to avoid compile exception
 
 void moveToEnd() {
 	int factor = 0;
-
+	//행의 개수>스크린에 보여지는 행의 개수
 	if(E.numrows > E.screenrows) 
-		factor = E.numrows / E.screenrows;
+		factor = E.numrows / E.screenrows; //factor : 스크린 크기에 맞게 나누어지는 div 개수
 	
-	if(factor > 0) {
-		if(E.cy != E.screenrows) {
-			E.cy = E.screenrows - 1;
-			E.cx = 0;
+	if(factor > 0) { //스크린 크기를 초과하면
+		if(E.cy != E.screenrows) { //y커서가 스크린이랑 일치하지 않으면
+			E.cy = E.screenrows - 1; //y축를 스크린 하단
+			E.cx = 0; //x축은 0
 		}
-		editorRefreshScreen();
-		if(++E.rowoff + E.cy <= E.numrows-1) {
-			editorRefreshScreen();
-			moveToEnd();
+		editorRefreshScreen(); // 값 설정후 화면 갱신
+		if(++E.rowoff + E.cy <= E.numrows-1) { //현재 rowoffset에 y커서를 더한 값이 row의 개수보다 작거나 같으면
+			editorRefreshScreen(); //화면 갱신
+			moveToEnd(); //재귀
 		} else 
-			E.rowoff--;
-	} else {
-		E.cy = E.numrows - 1;
+			E.rowoff--; //rowoffset 돌리기
+	} else { //현재 스크린 보다 작은 열의 개수를 가지고 있다면
+		E.cy = E.numrows - 1; //그 열 끝으로 (x,y)축 이동
 		E.cx = 0;
 	}
 }
 
 void moveToFirst() {
-	if(E.rowoff > 0) {
-		E.cy = 0;
-		E.cx = 0;
-		editorRefreshScreen();
-		E.rowoff--;
+	if(E.rowoff > 0) { //행의 변위가 존재하면
+		E.cy = 0; 
+		E.cx = 0; //(0,0)으로 커서를 이동시킨 후
+		editorRefreshScreen(); //화면 갱신
+		E.rowoff--; //
 		editorRefreshScreen();
 		moveToFirst();
-	} else { 
+	} else { //변위가 존재하지 않을 시
 		E.cy = 0;
-		E.cx = 0;
+		E.cx = 0; //(0,0) 초기화
 	}
 }
 
 void moveToLineEnd() {
-	E.cx = E.row[E.rowoff + E.cy].size;
+	E.cx = E.row[E.rowoff + E.cy].size; 
 }
 
 #define HLDB_ENTRIES (sizeof(HLDB)/sizeof(HLDB[0]))
@@ -577,6 +542,7 @@ void editorUpdateSyntax(erow *row) {
 }
 
 /* Maps syntax highlight token types to terminal colors. */
+//색 참조 https://en.wikipedia.org/wiki/ANSI_escape_code#Colors
 int editorSyntaxToColor(int hl) {
     switch(hl) {
     case HL_COMMENT:
@@ -675,11 +641,11 @@ void editorDelRow(int at) {
 
     if (at >= E.numrows) return;
     row = E.row+at;
-    editorFreeRow(row);
+    editorFreeRow(row); //열 삭제 및 메모리 할당해제
     memmove(E.row+at,E.row+at+1,sizeof(E.row[0])*(E.numrows-at-1));
-    for (int j = at; j < E.numrows-1; j++) E.row[j].idx--;
-    E.numrows--;
-    E.dirty++;
+    for (int j = at; j < E.numrows-1; j++) E.row[j].idx--; //현재 지점부터 마지막지점까지 한칸식 당기기
+    E.numrows--; //전체 열 삭제
+    E.dirty++; 
 }
 
 /* Turn the editor rows into a single heap-allocated string.
@@ -737,7 +703,7 @@ void editorRowAppendString(erow *row, char *s, size_t len) {
     row->chars = realloc(row->chars,row->size+len+1);
     memcpy(row->chars+row->size,s,len);
     row->size += len;
-    row->chars[row->size] = '\0';
+    row->chars[row->size] = '\0'; //마지막을 나타냄
 	editorUpdateRow(row);
     E.dirty++;
 }
@@ -810,19 +776,22 @@ fixcursor:
 }
 
 /* Delete the char at the current prompt position. */
+//DELETE 기능 구현 필요
 void editorDelChar() {
     int filerow = E.rowoff+E.cy;
     int filecol = E.coloff+E.cx;
-	erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow];
+	erow *row = (filerow >= E.numrows) ? NULL : &E.row[filerow]; //filerow >= E.numrows  : 실질적인 영역이 아님
 	int delRowSize = row->size;
 
     if (!row || (filecol == 0 && filerow == 0)) return;
     if (filecol == 0) {
         /* Handle the case of column 0, we need to move the current line
          * on the right of the previous one. */
-        filecol = E.row[filerow-1].size;
-        editorRowAppendString(&E.row[filerow-1],row->chars,row->size);
-        editorDelRow(filerow);
+		//ㅁㄴㅇㄹ
+		//     <-아무것도 없는 상태 따라서 글을 지우게 되면 전 글의 맨 위로 올라가게됨
+        filecol = E.row[filerow-1].size; // 이전 줄의 맨 끝으로 
+        editorRowAppendString(&E.row[filerow-1],row->chars,row->size); //[filerow-1] = 이전 행렬
+        editorDelRow(filerow); //현재 줄 삭제
 		row = NULL;
         if (E.cy == 0)
             E.rowoff--;
@@ -919,10 +888,13 @@ struct abuf {
 
 #define ABUF_INIT {NULL,0}
 
+//기존의 버퍼에 글자 추가
 void abAppend(struct abuf *ab, const char *s, int len) {
+	//기존의 내용(ab->b)에 추가될 글자수만큼 메모리 재할당
     char *new = realloc(ab->b,ab->len+len);
 
     if (new == NULL) return;
+	//메모리 복사
     memcpy(new+ab->len,s,len);
     ab->b = new;
     ab->len += len;
@@ -940,17 +912,18 @@ void editorRefreshScreen(void) {
     char buf[32];
     struct abuf ab = ABUF_INIT;
 
-    abAppend(&ab,"\x1b[?25l",6); /* Hide cursor. */
-    abAppend(&ab,"\x1b[H",3); /* Go home. */
+    abAppend(&ab,"\x1b[?25l",6); /* Hide cursor.////\x1b[?25l : 터미널 커서 off, \x1b[?25h : 터미널 커서 on*/
+    abAppend(&ab,"\x1b[H",3); /* Go home. */ // ANSI
+	//버퍼 그리기
     for (y = 0; y < E.screenrows; y++) {
         int filerow = E.rowoff+y;
-
-        if (filerow >= E.numrows) {
-            if (E.numrows == 0 && y == E.screenrows/3) {
+		
+        if (filerow >= E.numrows) { //초기 파일이면
+            if (E.numrows == 0 && y == E.screenrows/3) { //현재 에디터의 행의 개수가 0이고, y가 1/3지점이면
                 char welcome[80];
                 int welcomelen = snprintf(welcome,sizeof(welcome),
-                    "Kilo editor -- verison %s\x1b[0K\r\n", KILO_VERSION);
-                int padding = (E.screencols-welcomelen)/2;
+                    "Kilo editor -- verison %s\x1b[0K\r\n", KILO_VERSION); //file info 표시
+                int padding = (E.screencols-welcomelen)/2; //정중앙에 보이기 위한 padding값
                 if (padding) {
                     abAppend(&ab,"~",1);
                     padding--;
@@ -975,24 +948,26 @@ void editorRefreshScreen(void) {
             for (j = 0; j < len; j++) {
                 if (hl[j] == HL_NONPRINT) {
                     char sym;
-                    abAppend(&ab,"\x1b[7m",4);
+                    abAppend(&ab,"\x1b[7m",4); 
                     if (c[j] <= 26)
                         sym = '@'+c[j];
                     else
                         sym = '?';
                     abAppend(&ab,&sym,1);
-                    abAppend(&ab,"\x1b[0m",4);
+                    abAppend(&ab,"\x1b[0m",4); //\x1b[0m : 컬러 해제 
+
                 } else if (hl[j] == HL_NORMAL) {
                     if (current_color != -1) {
-                        abAppend(&ab,"\x1b[39m",5);
+                        abAppend(&ab,"\x1b[39m",5); //\x1b[39m : white
                         current_color = -1;
                     }
                     abAppend(&ab,c+j,1);
+
                 } else {
                     int color = editorSyntaxToColor(hl[j]);
                     if (color != current_color) {
                         char buf[16];
-                        int clen = snprintf(buf,sizeof(buf),"\x1b[%dm",color);
+                        int clen = snprintf(buf,sizeof(buf),"\x1b[%dm",color); //컬러에 따라 
                         current_color = color;
                         abAppend(&ab,buf,clen);
                     }
@@ -1006,9 +981,11 @@ void editorRefreshScreen(void) {
     }
 
     /* Create a two rows status. First row: */
+	//상태창
     abAppend(&ab,"\x1b[0K",4);
     abAppend(&ab,"\x1b[7m",4);
     char status[80], rstatus[80];
+
     int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
         E.filename, E.numrows, E.dirty ? "(modified)" : "");
     int rlen = snprintf(rstatus, sizeof(rstatus),
@@ -1024,12 +1001,12 @@ void editorRefreshScreen(void) {
             len++;
         }
     }
-    abAppend(&ab,"\x1b[0m\r\n",6);
+    abAppend(&ab,"\x1b[0m\r\n",6); //컬러해제
 
     /* Second row depends on E.statusmsg and the status message update time. */
     abAppend(&ab,"\x1b[0K",4);
-    int msglen = strlen(E.statusmsg);
-    if (msglen && time(NULL)-E.statusmsg_time < 5)
+    int msglen = strlen(E.statusmsg); //상태메시지 크기
+    if (msglen && time(NULL)-E.statusmsg_time < 5) //5초동안 표시
         abAppend(&ab,E.statusmsg,msglen <= E.screencols ? msglen : E.screencols);
 
     /* Put cursor at its current position. Note that the horizontal position
@@ -1048,17 +1025,20 @@ void editorRefreshScreen(void) {
     snprintf(buf,sizeof(buf),"\x1b[%d;%dH",E.cy+1,cx);
     abAppend(&ab,buf,strlen(buf));
     abAppend(&ab,"\x1b[?25h",6); /* Show cursor. */
-    write(STDOUT_FILENO,ab.b,ab.len);
+    write(STDOUT_FILENO,ab.b,ab.len); //실질적 표시
     abFree(&ab);
 }
 
 /* Set an editor status message for the second line of the status, at the
  * end of the screen. */
+//https://norux.me/19 참고 
+// ... :가변인자, 가변파라미터 
 void editorSetStatusMessage(const char *fmt, ...) {
-    va_list ap;
-    va_start(ap,fmt);
-    vsnprintf(E.statusmsg,sizeof(E.statusmsg),fmt,ap);
-    va_end(ap);
+    va_list ap; //va_list : 각 가변 인자의 시작 주소를 가리킬 포인터
+    va_start(ap,fmt); //가변인자 중 첫 번째의 인자의 주소를 가르쳐주는 중요한 매크로
+    vsnprintf(E.statusmsg,sizeof(E.statusmsg),fmt,ap); 
+	//int vsnprintf(char* dest, size_t maxCount, const char* format, va_list args)
+    va_end(ap); //사용한 가변인자 변수를 끝낼 때 사용
     E.statusmsg_time = time(NULL);
 }
 
@@ -1083,21 +1063,21 @@ void editorFind(int fd) {
 } while (0)
 
     /* Save the cursor position in order to restore it later. */
-    int saved_cx = E.cx, saved_cy = E.cy;
-    int saved_coloff = E.coloff, saved_rowoff = E.rowoff;
+    int saved_cx = E.cx, saved_cy = E.cy; //커서 위치 저장해두기
+    int saved_coloff = E.coloff, saved_rowoff = E.rowoff; //오프셋 저장해두기
 
     while(1) {
         editorSetStatusMessage(
             "Search: %s (Use ESC/Arrows/Enter)", query);
         editorRefreshScreen();
 
-        int c = editorReadKey(fd);
+        int c = editorReadKey(fd); //key input
         if (c == DEL_KEY || c == CTRL_H || c == BACKSPACE) {
             if (qlen != 0) query[--qlen] = '\0';
             last_match = -1;
         } else if (c == ESC || c == ENTER) {
             if (c == ESC) {
-                E.cx = saved_cx; E.cy = saved_cy;
+                E.cx = saved_cx; E.cy = saved_cy; //RESTORE
                 E.coloff = saved_coloff; E.rowoff = saved_rowoff;
             }
             FIND_RESTORE_HL;
@@ -1239,6 +1219,7 @@ void editorMoveCursor(int key) {
 
 /* Process events arriving from the standard input, which is, the user
  * is typing stuff on the terminal. */
+//저장하지 않고 종료하는 경우 3번의 기회
 #define KILO_QUIT_TIMES 3
 void editorProcessKeypress(int fd) {
     /* When the file is modified, requires Ctrl-q to be pressed N times
