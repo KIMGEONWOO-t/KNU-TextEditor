@@ -12,6 +12,10 @@ Keys:
     CTRL-S: Save
     CTRL-Q: Quit
     CTRL-F: Find string in file (ESC to exit search, arrows to navigate)
+    CTRL-D: Move to end of file
+    CTRL-X: Remove one line
+    CTRL-N: Display each number of the row
+    CTRL-O: Help, Re-display the help-document
 
 Kilo does not depend on any library (not even curses). It uses fairly standard
 VT100 (and similar terminals) escape sequences. The project is in alpha
