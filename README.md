@@ -21,7 +21,9 @@ Keys:
 	.kilorc: Editor configuration file
 
 
-<h3> Contributor  </h3>
-<p> antirez </p>
-<p> Hyun Soo Shin </p>
-<p> Hyun Wook Hong </p>
+<h3> Contributors  </h3>
+<ul>
+	<li> antirez </li>
+	<li> Hyun Soo Shin </li>
+	<li> Hyun Wook Hong </li>
+</ul>
